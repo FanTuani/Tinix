@@ -1,0 +1,101 @@
+# Complex Test Script - Advanced Process Management Scenarios
+# This script demonstrates comprehensive process management features
+
+# ============================================
+# Phase 1: Initial Process Creation
+# ============================================
+create 20
+create 15
+create 25
+create 10
+create 30
+
+ps
+
+# ============================================
+# Phase 2: Execute Some Ticks
+# ============================================
+tick 5
+
+ps
+
+# ============================================
+# Phase 3: Manual Process Scheduling
+# ============================================
+# Manually run specific processes
+run 1
+run 3
+run 2
+
+tick 3
+
+ps
+
+# ============================================
+# Phase 4: Process Blocking and Wakeup
+# ============================================
+# Block some processes
+block 1 10
+block 2 8
+
+ps
+
+# Continue execution while processes are blocked
+tick 5
+
+ps
+
+# Wake up blocked processes
+wakeup 1
+wakeup 2
+
+ps
+
+# ============================================
+# Phase 5: Mixed Operations
+# ============================================
+# Create more processes during execution
+create 12
+create 18
+
+ps
+
+# Execute more ticks
+tick 8
+
+ps
+
+# Block and immediately wake up a process
+block 3 15
+wakeup 3
+
+ps
+
+# ============================================
+# Phase 6: Process Termination
+# ============================================
+# Kill some processes
+kill 4
+kill 5
+
+ps
+
+# Execute ticks to complete remaining processes
+tick 20
+
+ps
+
+# ============================================
+# Phase 7: Create New Processes After Cleanup
+# ============================================
+create 8
+create 10
+create 5
+
+ps
+
+# Run them to completion
+tick 15
+
+# Final status
+ps

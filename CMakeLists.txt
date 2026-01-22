@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(os_sim LANGUAGES CXX)
+project(tinix LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,6 @@ file(GLOB_RECURSE SOURCES
     src/*.cpp
 )
 
-add_executable(os_sim ${SOURCES})
+add_executable(tinix ${SOURCES})
 
-target_include_directories(os_sim PRIVATE include)
+target_include_directories(tinix PRIVATE include)

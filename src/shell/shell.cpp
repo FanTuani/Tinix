@@ -1,6 +1,7 @@
 #include "shell/shell.h"
 #include <iostream>
 #include <sstream>
+#include <fstream>
 
 Shell::Shell(ProcessManager& pm) : pm_(pm), running_(true) {}
 
@@ -41,6 +42,7 @@ void Shell::execute_command(const std::vector<std::string>& args) {
                   << "  run <pid>        - Manually schedule a process to run\n"
                   << "  block <pid> [t]  - Block a process for t ticks (default: 5)\n"
                   << "  wakeup <pid>     - Wake up a blocked process\n"
+                  << "  exe <file>    - Execute commands from a script file\n"
                   << "  exit             - Shutdown the simulation\n";
     } else if (cmd == "ps") {
         pm_.dump_processes();
@@ -88,9 +90,43 @@ void Shell::execute_command(const std::vector<std::string>& args) {
         } else {
             std::cout << "Usage: wakeup <pid>\n";
         }
+    } else if (cmd == "exe") {
+        if (args.size() > 1) {
+            execute_script(args[1]);
+        } else {
+            std::cout << "Usage: exe <filename>\n";
+        }
     } else if (cmd == "exit") {
         running_ = false;
     } else {
         std::cout << "Unknown command: " << cmd << "\n";
     }
+}
+
+void Shell::execute_script(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cout << "Error: Could not open script file '" << filename << "'\n";
+        return;
+    }
+
+    std::cout << "Executing script: " << filename << "\n";
+    std::string line;
+    int line_num = 0;
+    
+    while (std::getline(file, line)) {
+        line_num++;
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        std::cout << ">>> " << line << "\n";
+        auto args = parse_command(line);
+        if (!args.empty()) {
+            execute_command(args);
+        }
+    }
+    
+    file.close();
+    std::cout << "Script execution completed.\n";
 }

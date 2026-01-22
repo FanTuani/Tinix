@@ -14,4 +14,5 @@ private:
 
     std::vector<std::string> parse_command(const std::string& input);
     void execute_command(const std::vector<std::string>& args);
+    void execute_script(const std::string& filename);
 };
