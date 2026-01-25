@@ -1,9 +1,10 @@
 #include "shell/shell.h"
+#include "kernel.h"
 #include <iostream>
 #include <sstream>
 #include <fstream>
 
-Shell::Shell(ProcessManager& pm) : pm_(pm), running_(true) {}
+Shell::Shell(Kernel& kernel) : kernel_(kernel), running_(true) {}
 
 void Shell::run() {
     std::string line;
@@ -49,10 +50,10 @@ void Shell::execute_command(const std::vector<std::string>& args) {
                   << "  script <file>    - Execute commands from a script file\n"
                   << "  exit             - Shutdown the simulation\n";
     } else if (cmd == "ps") {
-        pm_.dump_processes();
+        kernel_.get_process_manager().dump_processes();
     } else if (cmd == "create" or cmd == "cr") {
         if (args.size() > 2 && args[1] == "-f") {
-            int pid = pm_.create_process_from_file(args[2]);
+            int pid = kernel_.get_process_manager().create_process_from_file(args[2]);
             if (pid != -1) {
                 std::cout << "Created process PID: " << pid << " from " << args[2] << "\n";
             }
@@ -61,12 +62,12 @@ void Shell::execute_command(const std::vector<std::string>& args) {
             if (args.size() > 1) {
                 total_time = std::stoi(args[1]);
             }
-            int pid = pm_.create_process(total_time);
+            int pid = kernel_.get_process_manager().create_process(total_time);
             std::cout << "Created process PID: " << pid << "\n";
         }
     } else if (cmd == "kill") {
         if (args.size() > 1) {
-            pm_.terminate_process(std::stoi(args[1]));
+            kernel_.get_process_manager().terminate_process(std::stoi(args[1]));
         } else {
             std::cout << "Usage: kill <pid>\n";
         }
@@ -76,11 +77,11 @@ void Shell::execute_command(const std::vector<std::string>& args) {
             n = std::stoi(args[1]);
         }
         for (int i = 0; i < n; i++) {
-            pm_.tick();
+            kernel_.get_process_manager().tick();
         }
     } else if (cmd == "run") {
         if (args.size() > 1) {
-            pm_.run_process(std::stoi(args[1]));
+            kernel_.get_process_manager().run_process(std::stoi(args[1]));
         } else {
             std::cout << "Usage: run <pid>\n";
         }
@@ -91,29 +92,29 @@ void Shell::execute_command(const std::vector<std::string>& args) {
             if (args.size() > 2) {
                 duration = std::stoi(args[2]);
             }
-            pm_.block_process(pid, duration);
+            kernel_.get_process_manager().block_process(pid, duration);
         } else {
             std::cout << "Usage: block <pid> [duration]\n";
         }
     } else if (cmd == "wakeup") {
         if (args.size() > 1) {
-            pm_.wakeup_process(std::stoi(args[1]));
+            kernel_.get_process_manager().wakeup_process(std::stoi(args[1]));
         } else {
             std::cout << "Usage: wakeup <pid>\n";
         }
     } else if (cmd == "pagetable" or cmd == "pt") {
         if (args.size() > 1) {
             int pid = std::stoi(args[1]);
-            pm_.get_memory_manager().dump_page_table(pid);
+            kernel_.get_memory_manager().dump_page_table(pid);
         } else {
             std::cout << "Usage: pagetable <pid>\n";
         }
     } else if (cmd == "mem") {
-        pm_.get_memory_manager().dump_physical_memory();
+        kernel_.get_memory_manager().dump_physical_memory();
     } else if (cmd == "memstats" or cmd == "ms") {
         if (args.size() > 1) {
             int pid = std::stoi(args[1]);
-            auto stats = pm_.get_memory_manager().get_process_stats(pid);
+            auto stats = kernel_.get_memory_manager().get_process_stats(pid);
             std::cout << "=== Memory Stats for PID " << pid << " ===\n";
             std::cout << "Memory Accesses: " << stats.memory_accesses << "\n";
             std::cout << "Page Faults: " << stats.page_faults << "\n";
@@ -122,7 +123,7 @@ void Shell::execute_command(const std::vector<std::string>& args) {
                 std::cout << "Page Fault Rate: " << fault_rate << "%\n";
             }
         } else {
-            auto stats = pm_.get_memory_manager().get_stats();
+            auto stats = kernel_.get_memory_manager().get_stats();
             std::cout << "=== System Memory Stats ===\n";
             std::cout << "Total Memory Accesses: " << stats.memory_accesses << "\n";
             std::cout << "Total Page Faults: " << stats.page_faults << "\n";

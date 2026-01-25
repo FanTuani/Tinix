@@ -1,16 +1,16 @@
 #pragma once
 #include <string>
 #include <vector>
-#include "../proc/process_manager.h"
-#include "../mem/memory_manager.h"
+
+class Kernel;
 
 class Shell {
 public:
-    explicit Shell(ProcessManager& pm);
+    explicit Shell(Kernel& kernel);
     void run();
 
 private:
-    ProcessManager& pm_;
+    Kernel& kernel_;
     bool running_;
 
     std::vector<std::string> parse_command(const std::string& input);

@@ -11,7 +11,7 @@ class Program;
 
 class ProcessManager {
 public:
-    ProcessManager(size_t num_frames, size_t page_size);
+    ProcessManager(MemoryManager& memory_manager);
     
     int create_process(int total_time = 10);
     int create_process_from_file(const std::string& filename);
@@ -33,7 +33,7 @@ private:
     int next_tick_ = 0;
     int cur_pid_ = -1;
     
-    MemoryManager memory_manager_;
+    MemoryManager& memory_manager_;
     
     void schedule();
     void check_blocked_processes();

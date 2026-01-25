@@ -2,8 +2,8 @@
 #include <iostream>
 #include "proc/program.h"
 
-ProcessManager::ProcessManager(size_t num_frames, size_t page_size)
-    : memory_manager_(num_frames, page_size) {}
+ProcessManager::ProcessManager(MemoryManager& memory_manager)
+    : memory_manager_(memory_manager) {}
 
 int ProcessManager::create_process(int total_time) {
     auto program = Program::create_default(total_time);
