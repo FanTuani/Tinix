@@ -1,6 +1,7 @@
 #pragma once
 #include "physical_memory.h"
 #include "page_table.h"
+#include "dev/disk.h"
 #include <map>
 #include <memory>
 #include <cstdint>
@@ -17,7 +18,7 @@ struct MemoryStats {
 
 class MemoryManager {
 public:
-    MemoryManager(size_t num_frames, size_t page_size);
+    MemoryManager(size_t num_frames, size_t page_size, DiskDevice& disk);
     
     void create_process_memory(int pid, size_t num_pages);
     void free_process_memory(int pid);
@@ -36,9 +37,11 @@ private:
     std::map<int, std::unique_ptr<PageTable>> page_tables_;
     std::map<int, MemoryStats> process_stats_;
     MemoryStats stats_;
+    DiskDevice& disk_;
     
     size_t page_size_;
     size_t clock_ptr_ = 0;
+    size_t next_swap_block_ = 0;
 
     bool handle_page_fault(int pid, size_t page_number, AccessType type);
 };

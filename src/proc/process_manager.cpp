@@ -1,6 +1,7 @@
 #include "proc/process_manager.h"
 #include <iostream>
 #include "proc/program.h"
+#include "common/config.h"
 
 ProcessManager::ProcessManager(MemoryManager& memory_manager)
     : memory_manager_(memory_manager) {}
@@ -27,6 +28,7 @@ int ProcessManager::create_process_with_program(
     pcb.state = ProcessState::Ready;
     pcb.program = program;
     pcb.total_time = program->size();
+    pcb.virtual_pages = tinix::config::DEFAULT_VIRTUAL_PAGES;
 
     processes_[pid] = pcb;
     ready_queue_.push(pid);

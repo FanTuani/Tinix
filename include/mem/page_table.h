@@ -7,6 +7,8 @@ struct PageTableEntry {
     size_t frame_number = 0;
     bool dirty = false;
     bool referenced = false;
+    bool on_disk = false;
+    size_t swap_block = 0;
 
     void clear() {
         present = false;

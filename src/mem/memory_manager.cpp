@@ -3,9 +3,10 @@
 #include <iomanip>
 #include <stdexcept>
 
-MemoryManager::MemoryManager(size_t num_frames, size_t page_size)
+MemoryManager::MemoryManager(size_t num_frames, size_t page_size, DiskDevice& disk)
     : physical_memory_(num_frames, page_size),
-      page_size_(page_size) {}
+      page_size_(page_size),
+      disk_(disk) {}
 
 // 为进程创建页表
 void MemoryManager::create_process_memory(int pid, size_t num_pages) {
@@ -45,7 +46,7 @@ bool MemoryManager::access_memory(int pid, uint64_t virtual_addr, AccessType typ
         throw std::runtime_error("No page table for PID " + std::to_string(pid));
     }
     
-    // 地址转换：虚拟地址 -> 页号 + 页内偏移
+    // 地址转换
     size_t page_number = virtual_addr / page_size_;
     size_t offset = virtual_addr % page_size_;
     
@@ -60,7 +61,7 @@ bool MemoryManager::access_memory(int pid, uint64_t virtual_addr, AccessType typ
     
     auto& entry = (*pt)[page_number];
     
-    // 缺页：页面不在物理内存中
+    // 缺页
     if (!entry.present) {
         stats_.page_faults++;
         process_stats_[pid].page_faults++;
@@ -90,6 +91,18 @@ bool MemoryManager::access_memory(int pid, uint64_t virtual_addr, AccessType typ
 }
 
 bool MemoryManager::handle_page_fault(int pid, size_t page_number, AccessType type) {
+    auto& entry = (*page_tables_[pid])[page_number];
+    
+    if (entry.on_disk) {
+        std::cout << "[Swap] Reading PID=" << pid 
+                  << " VPage=" << page_number 
+                  << " from Disk Block " << entry.swap_block << std::endl;
+        
+        // 使用哑数据模拟换入
+        std::vector<uint8_t> dummy_data(page_size_);
+        disk_.read_block(entry.swap_block, dummy_data.data());
+    }
+
     // 尝试分配空闲物理页框
     auto frame_opt = physical_memory_.allocate_frame(pid, page_number);
     
@@ -128,12 +141,23 @@ bool MemoryManager::handle_page_fault(int pid, size_t page_number, AccessType ty
                 std::cout << "[Evict] Replacing Frame " << clock_ptr_
                           << " from PID=" << victim_pid
                           << ", VPage=" << victim_vpage << std::endl;
+                
                 if (victim_entry.dirty) {
-                    // 脏页写回
-                    std::cout << "[Evict] Dirty page writeback: PID="
-                              << victim_pid << ", VPage=" << victim_vpage
-                              << ", Frame=" << clock_ptr_ << std::endl;
+                    // 脏页写回磁盘（交换出）
+                    if (!victim_entry.on_disk) {
+                        victim_entry.swap_block = next_swap_block_++;
+                        victim_entry.on_disk = true;
+                    }
+                    
+                    std::cout << "[Swap] Writing PID=" << victim_pid 
+                              << " VPage=" << victim_vpage 
+                              << " to Disk Block " << victim_entry.swap_block << std::endl;
+                    
+                    // 使用哑数据模拟写回
+                    std::vector<uint8_t> dummy_data(page_size_, 0xAA); // 0xAA 表示标记数据
+                    disk_.write_block(victim_entry.swap_block, dummy_data.data());
                 }
+                
                 victim_entry.clear();
                 physical_memory_.assign_frame(clock_ptr_, pid, page_number);
                 frame_number = clock_ptr_;
@@ -144,7 +168,6 @@ bool MemoryManager::handle_page_fault(int pid, size_t page_number, AccessType ty
     }
 
     // 更新缺页进程的页表项
-    auto& entry = (*page_tables_[pid])[page_number];
     entry.present = true;
     entry.frame_number = frame_number;
     entry.referenced = true;
@@ -171,7 +194,7 @@ void MemoryManager::dump_page_table(int pid) const {
     for (size_t i = 0; i < pt->size(); ++i) {
         const auto& entry = (*pt)[i];
         std::cout << std::setw(5) << i << " |    "
-                 << (entry.present ? "Y" : "N") << "    | ";
+                 << entry.present << "    | ";
         
         if (entry.present) {
             std::cout << std::setw(5) << entry.frame_number;
@@ -179,8 +202,8 @@ void MemoryManager::dump_page_table(int pid) const {
             std::cout << "  -  ";
         }
         
-        std::cout << " |   " << (entry.dirty ? "Y" : "N")
-                 << "   |  " << (entry.referenced ? "Y" : "N") << std::endl;
+        std::cout << " |   " << entry.dirty
+                 << "   |  " << entry.referenced << std::endl;
     }
     
     auto stats_it = process_stats_.find(pid);
