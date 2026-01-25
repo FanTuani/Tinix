@@ -88,7 +88,13 @@ void ProcessManager::dump_processes() const {
 }
 
 void ProcessManager::tick() {
-    std::cout << "=== Tick " << next_tick_++ << " ===\n";
+    std::cout << "=== Tick " << next_tick_++ << " === (Total: " << processes_.size();
+    if (cur_pid_ != -1) {
+        std::cout << " | Running: PID=" << cur_pid_ << " PC=" << processes_[cur_pid_].pc;
+    } else {
+        std::cout << " | CPU Idle";
+    }
+    std::cout << ")\n";
 
     if (cur_pid_ == -1) {
         schedule();
@@ -234,7 +240,7 @@ void ProcessManager::check_blocked_processes() {
 }
 
 void ProcessManager::execute_instruction(PCB& pcb, const Instruction& inst) {
-    std::cout << "[Exec: " << pcb.pid << "] ";
+    std::cout << "[Exec] ";
     switch (inst.type) {
         case OpType::Compute:
             std::cout << "Compute\n";
