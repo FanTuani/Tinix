@@ -1,9 +1,10 @@
 #include "mem/physical_memory.h"
+#include "common/config.h"
 #include <iostream>
 #include <iomanip>
 
-PhysicalMemory::PhysicalMemory(size_t num_frames, size_t frame_size)
-    : frames_(num_frames), frame_size_(frame_size) {}
+PhysicalMemory::PhysicalMemory()
+    : frames_(tinix::config::PAGE_FRAMES), frame_size_(tinix::config::PAGE_SIZE) {}
 
 std::optional<size_t> PhysicalMemory::allocate_frame(int pid, size_t page_number) {
     for (size_t i = 0; i < frames_.size(); ++i) {

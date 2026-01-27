@@ -3,9 +3,7 @@
 #include <vector>
 #include <filesystem>
 
-DiskDevice::DiskDevice(const std::string& filename, size_t num_blocks, size_t block_size)
-    : filename_(filename), num_blocks_(num_blocks), block_size_(block_size) {
-    
+DiskDevice::DiskDevice() {
     initialize_disk();
 }
 

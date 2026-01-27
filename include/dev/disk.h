@@ -7,9 +7,7 @@
 
 class DiskDevice {
 public:
-    DiskDevice(const std::string& filename,
-               size_t num_blocks = tinix::config::DISK_NUM_BLOCKS,
-               size_t block_size = tinix::config::DISK_BLOCK_SIZE);
+    DiskDevice();
     ~DiskDevice();
 
     bool read_block(size_t block_id, uint8_t* out_buffer);
@@ -19,9 +17,9 @@ public:
     size_t get_block_size() const { return block_size_; }
 
 private:
-    std::string filename_;
-    size_t num_blocks_;
-    size_t block_size_;
+    std::string filename_ = tinix::config::DISK_IMAGE_NAME;
+    size_t num_blocks_ = tinix::config::DISK_NUM_BLOCKS;
+    size_t block_size_ = tinix::config::DISK_BLOCK_SIZE;
     std::fstream disk_file_;
 
     void initialize_disk();

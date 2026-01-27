@@ -11,7 +11,7 @@ struct FrameInfo {
 
 class PhysicalMemory {
 public:
-    explicit PhysicalMemory(size_t num_frames, size_t frame_size = 4096);
+    explicit PhysicalMemory();
     
     std::optional<size_t> allocate_frame(int pid, size_t page_number);
     void free_frame(size_t frame_number);

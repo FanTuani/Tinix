@@ -2,6 +2,7 @@
 #include "physical_memory.h"
 #include "page_table.h"
 #include "dev/disk.h"
+#include "common/config.h"
 #include <map>
 #include <memory>
 #include <cstdint>
@@ -18,7 +19,7 @@ struct MemoryStats {
 
 class MemoryManager {
 public:
-    MemoryManager(size_t num_frames, size_t page_size, DiskDevice& disk);
+    MemoryManager(DiskDevice& disk);
     
     void create_process_memory(int pid, size_t num_pages);
     void free_process_memory(int pid);
@@ -39,7 +40,7 @@ private:
     MemoryStats stats_;
     DiskDevice& disk_;
     
-    size_t page_size_;
+    size_t page_size_ = tinix::config::PAGE_SIZE;
     size_t clock_ptr_ = 0;
     size_t next_swap_block_ = 0;
 
