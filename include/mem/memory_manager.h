@@ -40,7 +40,7 @@ private:
     MemoryStats stats_;
     DiskDevice& disk_;
     
-    size_t page_size_ = tinix::config::PAGE_SIZE;
+    size_t page_size_ = config::PAGE_SIZE;
     size_t clock_ptr_ = 0;
     size_t next_swap_block_ = 0;
 

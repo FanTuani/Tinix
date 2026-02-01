@@ -8,8 +8,8 @@ class Program;
 struct PCB {
     int pid = -1;
     ProcessState state = ProcessState::New;
-    int time_slice = tinix::config::DEFAULT_TIME_SLICE;
-    int time_slice_left = tinix::config::DEFAULT_TIME_SLICE;
+    int time_slice = config::DEFAULT_TIME_SLICE;
+    int time_slice_left = config::DEFAULT_TIME_SLICE;
     int cpu_time = 0;
     int total_time = 10;
     int blocked_time = 0;

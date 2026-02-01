@@ -4,7 +4,7 @@
 #include <iomanip>
 
 PhysicalMemory::PhysicalMemory()
-    : frames_(tinix::config::PAGE_FRAMES), frame_size_(tinix::config::PAGE_SIZE) {}
+    : frames_(config::PAGE_FRAMES), frame_size_(config::PAGE_SIZE) {}
 
 std::optional<size_t> PhysicalMemory::allocate_frame(int pid, size_t page_number) {
     for (size_t i = 0; i < frames_.size(); ++i) {

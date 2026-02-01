@@ -28,7 +28,7 @@ int ProcessManager::create_process_with_program(
     pcb.state = ProcessState::Ready;
     pcb.program = program;
     pcb.total_time = program->size();
-    pcb.virtual_pages = tinix::config::DEFAULT_VIRTUAL_PAGES;
+    pcb.virtual_pages = config::DEFAULT_VIRTUAL_PAGES;
 
     processes_[pid] = pcb;
     ready_queue_.push(pid);

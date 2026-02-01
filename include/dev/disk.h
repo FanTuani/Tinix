@@ -17,9 +17,9 @@ public:
     size_t get_block_size() const { return block_size_; }
 
 private:
-    std::string filename_ = tinix::config::DISK_IMAGE_NAME;
-    size_t num_blocks_ = tinix::config::DISK_NUM_BLOCKS;
-    size_t block_size_ = tinix::config::DISK_BLOCK_SIZE;
+    std::string filename_ = config::DISK_IMAGE_NAME;
+    size_t num_blocks_ = config::DISK_NUM_BLOCKS;
+    size_t block_size_ = config::DISK_BLOCK_SIZE;
     std::fstream disk_file_;
 
     void initialize_disk();
