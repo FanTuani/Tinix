@@ -48,6 +48,20 @@ void Shell::execute_command(const std::vector<std::string>& args) {
                   << "  mem              - Display physical memory status\n"
                   << "  memstats [pid]   - Display memory statistics (system or per-process)\n"
                   << "  script <file>    - Execute commands from a script file\n"
+                  << "\n"
+                  << "  === File System Commands ===\n"
+                  << "  format           - Format the file system\n"
+                  << "  mount            - Mount the file system\n"
+                  << "  touch <file>     - Create a new file\n"
+                  << "  mkdir <dir>      - Create a new directory\n"
+                  << "  ls [path]        - List directory contents\n"
+                  << "  cd <path>        - Change current directory\n"
+                  << "  pwd              - Print working directory\n"
+                  << "  rm <file>        - Remove a file\n"
+                  << "  cat <file>       - Display file contents\n"
+                  << "  echo <text>      - Write text to file (use > for redirection)\n"
+                  << "  fsinfo           - Display file system information\n"
+                  << "\n"
                   << "  exit             - Shutdown the simulation\n";
     } else if (cmd == "ps") {
         kernel_.get_process_manager().dump_processes();
@@ -138,6 +152,98 @@ void Shell::execute_command(const std::vector<std::string>& args) {
         } else {
             std::cout << "Usage: script <filename>\n";
         }
+    
+    // === File System Commands ===
+    } else if (cmd == "format") {
+        if (kernel_.get_file_system().format()) {
+            std::cout << "File system formatted successfully.\n";
+        } else {
+            std::cout << "Failed to format file system.\n";
+        }
+    } else if (cmd == "mount") {
+        if (kernel_.get_file_system().mount()) {
+            std::cout << "File system mounted successfully.\n";
+        } else {
+            std::cout << "Failed to mount file system.\n";
+        }
+    } else if (cmd == "touch") {
+        if (args.size() > 1) {
+            kernel_.get_file_system().create_file(args[1]);
+        } else {
+            std::cout << "Usage: touch <filename>\n";
+        }
+    } else if (cmd == "mkdir") {
+        if (args.size() > 1) {
+            kernel_.get_file_system().create_directory(args[1]);
+        } else {
+            std::cout << "Usage: mkdir <dirname>\n";
+        }
+    } else if (cmd == "ls") {
+        std::string path = (args.size() > 1) ? args[1] : ".";
+        kernel_.get_file_system().list_directory(path);
+    } else if (cmd == "cd") {
+        if (args.size() > 1) {
+            kernel_.get_file_system().change_directory(args[1]);
+        } else {
+            kernel_.get_file_system().change_directory("/");
+        }
+    } else if (cmd == "pwd") {
+        std::cout << kernel_.get_file_system().get_current_directory() << "\n";
+    } else if (cmd == "rm") {
+        if (args.size() > 1) {
+            kernel_.get_file_system().remove_file(args[1]);
+        } else {
+            std::cout << "Usage: rm <filename>\n";
+        }
+    } else if (cmd == "cat") {
+        if (args.size() > 1) {
+            int fd = kernel_.get_file_system().open_file(args[1]);
+            if (fd >= 0) {
+                std::vector<char> buffer(4096);
+                ssize_t bytes_read = kernel_.get_file_system().read_file(fd, buffer.data(), buffer.size());
+                if (bytes_read > 0) {
+                    std::cout.write(buffer.data(), bytes_read);
+                    std::cout << "\n";
+                }
+                kernel_.get_file_system().close_file(fd);
+            }
+        } else {
+            std::cout << "Usage: cat <filename>\n";
+        }
+    } else if (cmd == "echo") {
+        if (args.size() < 2) {
+            std::cout << "Usage: echo <text> [> filename]\n";
+        } else {
+            std::string text;
+            size_t redirect_pos = 0;
+            for (size_t i = 1; i < args.size(); i++) {
+                if (args[i] == ">") {
+                    redirect_pos = i;
+                    break;
+                }
+                if (i > 1) text += " ";
+                text += args[i];
+            }
+            
+            if (redirect_pos > 0 && redirect_pos + 1 < args.size()) {
+                // 写入文件
+                std::string filename = args[redirect_pos + 1];
+                int fd = kernel_.get_file_system().open_file(filename);
+                if (fd >= 0) {
+                    text += "\n";
+                    kernel_.get_file_system().write_file(fd, text.c_str(), text.size());
+                    kernel_.get_file_system().close_file(fd);
+                } else {
+                    std::cout << "Failed to open file: " << filename << "\n";
+                }
+            } else {
+                // 输出到屏幕
+                std::cout << text << "\n";
+            }
+        }
+    } else if (cmd == "fsinfo") {
+        kernel_.get_file_system().print_superblock();
+    
     } else if (cmd == "exit") {
         running_ = false;
     } else {
@@ -154,10 +260,8 @@ void Shell::execute_script(const std::string& filename) {
 
     std::cout << "Executing script: " << filename << "\n";
     std::string line;
-    int line_num = 0;
     
     while (std::getline(file, line)) {
-        line_num++;
         if (line.empty() || line[0] == '#') {
             continue;
         }

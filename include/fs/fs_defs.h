@@ -99,3 +99,7 @@ struct DirectoryEntry {
         return inode_num != INVALID_INODE;
     }
 };
+
+static_assert(sizeof(SuperBlock) == BLOCK_SIZE, "SuperBlock size must equal BLOCK_SIZE");
+static_assert(sizeof(Inode) == 128, "Inode size must be 128 bytes");
+static_assert(sizeof(DirectoryEntry) == DIRENT_SIZE, "DirectoryEntry size must equal DIRENT_SIZE");

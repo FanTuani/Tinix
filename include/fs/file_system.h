@@ -1,8 +1,11 @@
 #pragma once
 #include "fs/fs_defs.h"
+#include "fs/inode_manager.h"
+#include "fs/block_manager.h"
+#include "fs/directory_manager.h"
+#include "fs/file_descriptor_table.h"
 #include "dev/disk.h"
 #include <memory>
-#include <vector>
 #include <string>
 
 class FileSystem {
@@ -10,27 +13,23 @@ public:
     explicit FileSystem(DiskDevice* disk);
     ~FileSystem();
 
-    // 格式化文件系统
     bool format();
-    
-    // 挂载文件系统
     bool mount();
-    
-    // 检查文件系统是否已挂载
     bool is_mounted() const { return mounted_; }
 
-    // Inode 管理
-    uint32_t alloc_inode();
-    void free_inode(uint32_t inode_num);
-    bool read_inode(uint32_t inode_num, Inode& out_inode);
-    bool write_inode(uint32_t inode_num, const Inode& inode);
-
-    // 数据块管理
-    uint32_t alloc_block();
-    void free_block(uint32_t block_num);
-
-    // SuperBlock 访问
-    const SuperBlock& get_superblock() const { return superblock_; }
+    // 目录操作
+    bool create_directory(const std::string& path);
+    bool list_directory(const std::string& path);
+    std::string get_current_directory() const { return current_dir_; }
+    bool change_directory(const std::string& path);
+    
+    // 文件操作
+    bool create_file(const std::string& path);
+    bool remove_file(const std::string& path);
+    int open_file(const std::string& path);
+    void close_file(int fd);
+    ssize_t read_file(int fd, void* buffer, size_t size);
+    ssize_t write_file(int fd, const void* buffer, size_t size);
     
     // 调试信息
     void print_superblock() const;
@@ -40,24 +39,15 @@ private:
     DiskDevice* disk_;
     SuperBlock superblock_;
     bool mounted_;
+    std::string current_dir_;
     
-    // 位图缓存
-    std::vector<uint8_t> inode_bitmap_;
-    std::vector<uint8_t> data_bitmap_;
-    bool bitmap_dirty_;
+    // 各功能模块
+    std::unique_ptr<InodeManager> inode_mgr_;
+    std::unique_ptr<BlockManager> block_mgr_;
+    std::unique_ptr<DirectoryManager> dir_mgr_;
+    std::unique_ptr<FileDescriptorTable> fd_table_;
 
-    // 辅助方法
     bool load_superblock();
     bool save_superblock();
-    bool load_bitmaps();
-    bool save_bitmaps();
-    
-    bool is_bit_set(const std::vector<uint8_t>& bitmap, uint32_t bit_index);
-    void set_bit(std::vector<uint8_t>& bitmap, uint32_t bit_index);
-    void clear_bit(std::vector<uint8_t>& bitmap, uint32_t bit_index);
-    
-    uint32_t find_free_bit(const std::vector<uint8_t>& bitmap, uint32_t max_bits);
-    
-    // 初始化根目录
     bool init_root_directory();
 };
