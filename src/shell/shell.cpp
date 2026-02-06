@@ -48,6 +48,7 @@ void Shell::execute_command(const std::vector<std::string>& args) {
                   << "  mem              - Display physical memory status\n"
                   << "  memstats [pid]   - Display memory statistics (system or per-process)\n"
                   << "  script <file>    - Execute commands from a script file\n"
+                  << "  dev [id]         - Display device status (all or by device id)\n"
                   << "\n"
                   << "  === File System Commands ===\n"
                   << "  format           - Format the file system\n"
@@ -151,6 +152,50 @@ void Shell::execute_command(const std::vector<std::string>& args) {
             execute_script(args[1]);
         } else {
             std::cerr << "Usage: script <filename>\n";
+        }
+    } else if (cmd == "dev" || cmd == "devinfo") {
+        const auto devices = kernel_.get_device_manager().snapshot();
+        if (devices.empty()) {
+            std::cerr << "No devices registered.\n";
+            return;
+        }
+
+        auto print_device = [](const auto& dev) {
+            std::cerr << "dev=" << dev.dev_id
+                      << " name=" << dev.name
+                      << " owner=";
+            if (dev.owner_pid == -1) {
+                std::cerr << "free";
+            } else {
+                std::cerr << dev.owner_pid;
+            }
+            std::cerr << " wait=[";
+            for (size_t i = 0; i < dev.wait_queue.size(); ++i) {
+                if (i > 0) std::cerr << ",";
+                std::cerr << dev.wait_queue[i];
+            }
+            std::cerr << "]\n";
+        };
+
+        if (args.size() == 1) {
+            std::cerr << "=== Device Status ===\n";
+            for (const auto& dev : devices) {
+                print_device(dev);
+            }
+            return;
+        }
+
+        try {
+            const auto target = static_cast<uint32_t>(std::stoul(args[1]));
+            for (const auto& dev : devices) {
+                if (dev.dev_id == target) {
+                    print_device(dev);
+                    return;
+                }
+            }
+            std::cerr << "Device not found: " << target << "\n";
+        } catch (const std::exception&) {
+            std::cerr << "Usage: dev [device_id]\n";
         }
     
     // === File System Commands ===

@@ -409,6 +409,50 @@ def case_complex_two_proc_cross_evict(exe: Path, repo: Path) -> None:
             raise AssertionError(f"expected cross-pid eviction\n--- stderr ---\n{r.err}")
 
 
+def case_device_queue_wakeup(exe: Path, repo: Path) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+
+        hold = cwd / "hold.pc"
+        wait = cwd / "wait.pc"
+        hold.write_text("\n".join(["DR 0", "S 3", "DD 0", "C"]) + "\n", encoding="utf-8")
+        wait.write_text("\n".join(["DR 0", "C", "DD 0", "C"]) + "\n", encoding="utf-8")
+
+        r = _run(
+            exe,
+            "\n".join(
+                [
+                    "format",
+                    "mount",
+                    f"create -f {hold.name}",
+                    f"create -f {wait.name}",
+                    "tick 20",
+                    "dev",
+                    "exit",
+                    "",
+                ]
+            ),
+            cwd,
+        )
+        if r.code != 0:
+            raise AssertionError(r.out + r.err)
+
+        m1 = re.search(rf"Created process PID:\s*(\d+)\s+from {re.escape(hold.name)}", r.err)
+        m2 = re.search(rf"Created process PID:\s*(\d+)\s+from {re.escape(wait.name)}", r.err)
+        if not m1 or not m2:
+            raise AssertionError(f"missing pids\n--- stderr ---\n{r.err}")
+        pid1 = int(m1.group(1))
+        pid2 = int(m2.group(1))
+
+        _require_contains(r.err, f"[Dev] Granted dev=0 (disk) to pid={pid1}")
+        _require_contains(r.err, f"[Dev] Queued pid={pid2} for dev=0 (disk), owner={pid1}")
+        _require_contains(r.err, f"[Dev] Released dev=0 (disk) by pid={pid1}, reassigned to pid={pid2}")
+        _require_contains(r.err, f"[Dev] Wakeup pid={pid2} for dev=0")
+        _require_contains(r.err, f"[Tick] Process {pid1} completed")
+        _require_contains(r.err, f"[Tick] Process {pid2} completed")
+        _require_contains(r.err, "dev=0 name=disk owner=free wait=[]")
+
+
 def case_swap_partition(exe: Path, repo: Path) -> None:
     swap_start = _load_swap_start(repo)
 
@@ -492,6 +536,7 @@ CASES = {
     "shell_script": case_shell_script,
     "complex_fs_swap_roundtrip": case_complex_fs_swap_roundtrip,
     "complex_two_proc_cross_evict": case_complex_two_proc_cross_evict,
+    "device_queue_wakeup": case_device_queue_wakeup,
     "swap_partition": case_swap_partition,
     "kernel_reformat_mismatch": case_kernel_reformat_mismatch,
 }

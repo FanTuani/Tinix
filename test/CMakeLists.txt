@@ -59,6 +59,14 @@ add_test(
 )
 
 add_test(
+  NAME tinix_device_queue_wakeup
+  COMMAND "${Python3_EXECUTABLE}" "${TINIX_TEST_RUNNER}"
+          --exe "$<TARGET_FILE:tinix>"
+          --repo "${CMAKE_SOURCE_DIR}"
+          --case device_queue_wakeup
+)
+
+add_test(
   NAME tinix_swap_partition
   COMMAND "${Python3_EXECUTABLE}" "${TINIX_TEST_RUNNER}"
           --exe "$<TARGET_FILE:tinix>"
@@ -82,6 +90,7 @@ set_tests_properties(
   tinix_shell_script
   tinix_complex_fs_swap_roundtrip
   tinix_complex_two_proc_cross_evict
+  tinix_device_queue_wakeup
   tinix_swap_partition
   tinix_kernel_reformat_mismatch
   PROPERTIES TIMEOUT 20

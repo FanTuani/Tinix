@@ -3,8 +3,43 @@
 #include "proc/program.h"
 #include "common/config.h"
 
-ProcessManager::ProcessManager(MemoryManager& memory_manager)
-    : memory_manager_(memory_manager) {}
+namespace {
+// 把设备转交给“仍在等待”的进程，并唤醒它；无效/不匹配的 pid 会被跳过。
+void wakeup_device_waiter(DeviceManager& device_manager,
+                          std::map<int, PCB>& processes,
+                          std::queue<int>& ready_queue,
+                          uint32_t dev_id,
+                          std::optional<int> next_owner_pid) {
+    while (next_owner_pid) {
+        const int pid = *next_owner_pid;
+        const auto it = processes.find(pid);
+        if (it == processes.end()) {
+            next_owner_pid = device_manager.release(pid, dev_id);
+            continue;
+        }
+
+        PCB& pcb = it->second;
+        if (pcb.state == ProcessState::Blocked &&
+            pcb.blocked_reason == BlockReason::Device &&
+            pcb.waiting_device == dev_id) {
+            pcb.state = ProcessState::Ready;
+            pcb.blocked_time = 0;
+            pcb.blocked_reason = BlockReason::None;
+            pcb.waiting_device = UINT32_MAX;
+            ready_queue.push(pid);
+            std::cerr << "[Dev] Wakeup pid=" << pid << " for dev=" << dev_id
+                      << "\n";
+            return;
+        }
+
+        next_owner_pid = device_manager.release(pid, dev_id);
+    }
+}
+}  // 命名空间
+
+ProcessManager::ProcessManager(MemoryManager& memory_manager,
+                               DeviceManager& device_manager)
+    : memory_manager_(memory_manager), device_manager_(device_manager) {}
 
 int ProcessManager::create_process(int total_time) {
     auto program = Program::create_default(total_time);
@@ -47,6 +82,12 @@ void ProcessManager::terminate_process(int pid) {
         return;
     }
     
+    for (const auto& [dev_id, next_owner_pid] :
+         device_manager_.release_all(pid)) {
+        wakeup_device_waiter(device_manager_, processes_, ready_queue_, dev_id,
+                             next_owner_pid);
+    }
+
     // 释放进程的内存资源
     memory_manager_.free_process_memory(pid);
     
@@ -122,6 +163,11 @@ void ProcessManager::tick() {
         if (pcb.pc >= pcb.program->size()) {  // 进程完成
             std::cerr << "[Tick] Process " << cur_pid_ << " completed\n";
             pcb.state = ProcessState::Terminated;
+            for (const auto& [dev_id, next_owner_pid] :
+                 device_manager_.release_all(cur_pid_)) {
+                wakeup_device_waiter(device_manager_, processes_, ready_queue_,
+                                     dev_id, next_owner_pid);
+            }
             memory_manager_.free_process_memory(cur_pid_);
             processes_.erase(cur_pid_);
             cur_pid_ = -1;
@@ -200,6 +246,8 @@ void ProcessManager::block_process(int pid, int duration) {
 
     pcb.state = ProcessState::Blocked;
     pcb.blocked_time = duration;
+    pcb.blocked_reason = BlockReason::Sleep;
+    pcb.waiting_device = UINT32_MAX;
     std::cerr << "Process " << pid << " is blocked for " << duration
               << " ticks\n";
 
@@ -223,6 +271,9 @@ void ProcessManager::wakeup_process(int pid) {
 
     pcb.state = ProcessState::Ready;
     pcb.blocked_time = 0;
+    pcb.blocked_reason = BlockReason::None;
+    pcb.waiting_device = UINT32_MAX;
+    device_manager_.cancel_wait(pid);
     ready_queue_.push(pid);
     std::cerr << "Process " << pid << " woken up and added to ready queue\n";
 }
@@ -230,11 +281,13 @@ void ProcessManager::wakeup_process(int pid) {
 void ProcessManager::check_blocked_processes() {
     // 更新阻塞进程的阻塞时间
     for (auto& [pid, pcb] : processes_) {
-        if (pcb.state == ProcessState::Blocked && pcb.blocked_time > 0) {
+        if (pcb.state == ProcessState::Blocked &&
+            pcb.blocked_reason == BlockReason::Sleep && pcb.blocked_time > 0) {
             pcb.blocked_time--;
             if (pcb.blocked_time <= 0) {
                 pcb.state = ProcessState::Ready;
                 ready_queue_.push(pid);
+                pcb.blocked_reason = BlockReason::None;
                 std::cerr << "[Tick] Process " << pid << " auto-woken up\n";
             }
         }
@@ -271,14 +324,28 @@ void ProcessManager::execute_instruction(PCB& pcb, const Instruction& inst) {
             break;
         case OpType::DevRequest:
             std::cerr << "DevRequest dev=" << inst.arg1 << "\n";
+            if (!device_manager_.request(pcb.pid,
+                                         static_cast<uint32_t>(inst.arg1))) {
+                pcb.state = ProcessState::Blocked;
+                pcb.blocked_time = 0;
+                pcb.blocked_reason = BlockReason::Device;
+                pcb.waiting_device = static_cast<uint32_t>(inst.arg1);
+            }
             break;
         case OpType::DevRelease:
             std::cerr << "DevRelease dev=" << inst.arg1 << "\n";
+            wakeup_device_waiter(device_manager_, processes_, ready_queue_,
+                                 static_cast<uint32_t>(inst.arg1),
+                                 device_manager_.release(
+                                     pcb.pid,
+                                     static_cast<uint32_t>(inst.arg1)));
             break;
         case OpType::Sleep:
             std::cerr << "Sleep " << inst.arg1 << "\n";
             pcb.state = ProcessState::Blocked;
             pcb.blocked_time = inst.arg1;
+            pcb.blocked_reason = BlockReason::Sleep;
+            pcb.waiting_device = UINT32_MAX;
             break;
     }
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "process.h"
 #include "instruction.h"
+#include "dev/device_manager.h"
 #include "mem/memory_manager.h"
 #include <map>
 #include <queue>
@@ -11,7 +12,7 @@ class Program;
 
 class ProcessManager {
 public:
-    ProcessManager(MemoryManager& memory_manager);
+    ProcessManager(MemoryManager& memory_manager, DeviceManager& device_manager);
     
     int create_process(int total_time = 10);
     int create_process_from_file(const std::string& filename);
@@ -25,6 +26,7 @@ public:
     void wakeup_process(int pid);
     
     MemoryManager& get_memory_manager() { return memory_manager_; }
+    DeviceManager& get_device_manager() { return device_manager_; }
 
 private:
     std::map<int, PCB> processes_;
@@ -34,6 +36,7 @@ private:
     int cur_pid_ = -1;
     
     MemoryManager& memory_manager_;
+    DeviceManager& device_manager_;
     
     void schedule();
     void check_blocked_processes();
