@@ -31,7 +31,7 @@ bool FileSystem::format() {
     superblock_.total_blocks = TOTAL_BLOCKS;
     superblock_.total_inodes = MAX_INODES;
     superblock_.free_blocks = MAX_DATA_BLOCKS;
-    superblock_.free_inodes = MAX_INODES - 1;  // root已占用
+    superblock_.free_inodes = MAX_INODES;
     
     superblock_.inode_bitmap_block = INODE_BITMAP_BLOCK;
     superblock_.data_bitmap_block = DATA_BITMAP_BLOCK;
@@ -46,25 +46,48 @@ bool FileSystem::format() {
     
     // 初始化位图
     std::vector<uint8_t> zero_bitmap(BLOCK_SIZE, 0);
-    zero_bitmap[0] = 0x01;  // 标记root inode
-    disk_->write_block(INODE_BITMAP_BLOCK, zero_bitmap.data());
-    
-    zero_bitmap[0] = 0x00;
-    disk_->write_block(DATA_BITMAP_BLOCK, zero_bitmap.data());
+    if (!disk_->write_block(INODE_BITMAP_BLOCK, zero_bitmap.data()) ||
+        !disk_->write_block(DATA_BITMAP_BLOCK, zero_bitmap.data())) {
+        std::cerr << "[FS] Format failed: unable to initialize bitmaps"
+                  << std::endl;
+        return false;
+    }
     
     // 清空inode表
     std::vector<uint8_t> zero_block(BLOCK_SIZE, 0);
     for (uint32_t i = 0; i < INODE_TABLE_BLOCKS; i++) {
-        disk_->write_block(INODE_TABLE_START + i, zero_block.data());
+        if (!disk_->write_block(INODE_TABLE_START + i, zero_block.data())) {
+            std::cerr << "[FS] Format failed: unable to clear inode table"
+                      << std::endl;
+            return false;
+        }
+    }
+
+    if (!block_mgr_->load_bitmaps()) {
+        std::cerr << "[FS] Format failed: unable to load bitmaps" << std::endl;
+        return false;
+    }
+
+    uint32_t root_inode = block_mgr_->alloc_inode();
+    if (root_inode != ROOT_INODE) {
+        std::cerr << "[FS] Format failed: unable to reserve root inode"
+                  << std::endl;
+        return false;
     }
     
     if (!init_root_directory()) {
         std::cerr << "[FS] Format failed: unable to create root directory" << std::endl;
         return false;
     }
-    
+
+    refresh_space_counters_from_bitmaps();
+    if (!save_superblock() || !block_mgr_->save_bitmaps()) {
+        std::cerr << "[FS] Format failed: unable to persist metadata"
+                  << std::endl;
+        return false;
+    }
+
     mounted_ = true;
-    block_mgr_->load_bitmaps();
     
     std::cerr << "[FS] Format complete!" << std::endl;
     std::cerr << "[FS] Total blocks: " << superblock_.total_blocks 
@@ -102,6 +125,22 @@ bool FileSystem::mount() {
     
     mounted_ = true;
     block_mgr_->set_bitmap_dirty(false);
+
+    const uint32_t old_free_blocks = superblock_.free_blocks;
+    const uint32_t old_free_inodes = superblock_.free_inodes;
+    refresh_space_counters_from_bitmaps();
+    if (old_free_blocks != superblock_.free_blocks ||
+        old_free_inodes != superblock_.free_inodes) {
+        std::cerr << "[FS] SuperBlock free space mismatch corrected from bitmaps"
+                  << std::endl;
+        if (!save_superblock()) {
+            std::cerr << "[FS] Mount failed: unable to persist corrected "
+                         "SuperBlock"
+                      << std::endl;
+            mounted_ = false;
+            return false;
+        }
+    }
     
     std::cerr << "[FS] Mount successful!" << std::endl;
     std::cerr << "[FS] Free blocks: " << superblock_.free_blocks 
@@ -129,6 +168,10 @@ bool FileSystem::init_root_directory() {
     
     std::vector<uint8_t> dir_block(BLOCK_SIZE, 0);
     DirectoryEntry* entries = reinterpret_cast<DirectoryEntry*>(dir_block.data());
+    const uint32_t num_entries = BLOCK_SIZE / DIRENT_SIZE;
+    for (uint32_t i = 0; i < num_entries; ++i) {
+        entries[i] = DirectoryEntry{};
+    }
     entries[0] = DirectoryEntry(".", ROOT_INODE);
     entries[1] = DirectoryEntry("..", ROOT_INODE);
     
@@ -165,8 +208,7 @@ bool FileSystem::create_directory(const std::string& path) {
     
     bool result = dir_mgr_->create_directory(path, current_dir_);
     if (result) {
-        superblock_.free_inodes--;
-        superblock_.free_blocks -= 2;
+        refresh_space_counters_from_bitmaps();
         save_superblock();
         block_mgr_->save_bitmaps();
     }
@@ -248,7 +290,7 @@ bool FileSystem::create_file(const std::string& path) {
         return false;
     }
     
-    superblock_.free_inodes--;
+    refresh_space_counters_from_bitmaps();
     save_superblock();
     block_mgr_->save_bitmaps();
     
@@ -289,8 +331,7 @@ bool FileSystem::remove_file(const std::string& path) {
     block_mgr_->free_inode(file_inode);
     dir_mgr_->remove_directory_entry(parent_inode, file_name);
     
-    superblock_.free_inodes++;
-    superblock_.free_blocks += inode.blocks_used;
+    refresh_space_counters_from_bitmaps();
     save_superblock();
     block_mgr_->save_bitmaps();
     
@@ -411,7 +452,6 @@ ssize_t FileSystem::write_file(int fd, const void* buffer, size_t size) {
             
             inode.direct_blocks[block_idx] = new_block;
             inode.blocks_used++;
-            superblock_.free_blocks--;
         }
         
         std::vector<uint8_t> block_data(BLOCK_SIZE, 0);
@@ -435,6 +475,7 @@ ssize_t FileSystem::write_file(int fd, const void* buffer, size_t size) {
     }
     
     inode_mgr_->write_inode(file->inode_num, inode);
+    refresh_space_counters_from_bitmaps();
     save_superblock();
     block_mgr_->save_bitmaps();
     
@@ -468,4 +509,9 @@ void FileSystem::print_inode(uint32_t inode_num) const {
     }
     std::cerr << std::endl;
     std::cerr << "===============================" << std::endl;
+}
+
+void FileSystem::refresh_space_counters_from_bitmaps() {
+    superblock_.free_inodes = block_mgr_->free_inodes();
+    superblock_.free_blocks = block_mgr_->free_blocks();
 }

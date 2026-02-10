@@ -167,6 +167,10 @@ bool DirectoryManager::add_directory_entry(uint32_t dir_inode, const std::string
     
     std::vector<uint8_t> block_data(BLOCK_SIZE, 0);
     DirectoryEntry* entries = reinterpret_cast<DirectoryEntry*>(block_data.data());
+    const uint32_t num_entries = BLOCK_SIZE / DIRENT_SIZE;
+    for (uint32_t i = 0; i < num_entries; ++i) {
+        entries[i] = DirectoryEntry{};
+    }
     entries[0] = DirectoryEntry(name.c_str(), inode_num);
     
     disk_->write_block(new_block, block_data.data());
@@ -243,6 +247,10 @@ bool DirectoryManager::create_directory(const std::string& path, const std::stri
     
     std::vector<uint8_t> block_data(BLOCK_SIZE, 0);
     DirectoryEntry* entries = reinterpret_cast<DirectoryEntry*>(block_data.data());
+    const uint32_t num_entries = BLOCK_SIZE / DIRENT_SIZE;
+    for (uint32_t i = 0; i < num_entries; ++i) {
+        entries[i] = DirectoryEntry{};
+    }
     entries[0] = DirectoryEntry(".", new_inode);
     entries[1] = DirectoryEntry("..", parent_inode);
     

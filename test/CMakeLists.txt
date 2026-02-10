@@ -82,6 +82,14 @@ add_test(
           --case kernel_reformat_mismatch
 )
 
+add_test(
+  NAME tinix_fs_superblock_accounting
+  COMMAND "${Python3_EXECUTABLE}" "${TINIX_TEST_RUNNER}"
+          --exe "$<TARGET_FILE:tinix>"
+          --repo "${CMAKE_SOURCE_DIR}"
+          --case fs_superblock_accounting
+)
+
 set_tests_properties(
   tinix_shell_help
   tinix_fs_persistence
@@ -93,5 +101,6 @@ set_tests_properties(
   tinix_device_queue_wakeup
   tinix_swap_partition
   tinix_kernel_reformat_mismatch
+  tinix_fs_superblock_accounting
   PROPERTIES TIMEOUT 20
 )

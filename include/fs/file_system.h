@@ -50,4 +50,5 @@ private:
     bool load_superblock();
     bool save_superblock();
     bool init_root_directory();
+    void refresh_space_counters_from_bitmaps();
 };

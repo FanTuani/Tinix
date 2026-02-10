@@ -16,6 +16,9 @@ public:
     
     uint32_t alloc_block();
     void free_block(uint32_t block_num);
+
+    uint32_t free_inodes() const;
+    uint32_t free_blocks() const;
     
     bool is_bitmap_dirty() const { return bitmap_dirty_; }
     void set_bitmap_dirty(bool dirty) { bitmap_dirty_ = dirty; }
@@ -26,8 +29,9 @@ private:
     std::vector<uint8_t> data_bitmap_;
     bool bitmap_dirty_;
     
-    bool is_bit_set(const std::vector<uint8_t>& bitmap, uint32_t bit_index);
+    bool is_bit_set(const std::vector<uint8_t>& bitmap, uint32_t bit_index) const;
     void set_bit(std::vector<uint8_t>& bitmap, uint32_t bit_index);
     void clear_bit(std::vector<uint8_t>& bitmap, uint32_t bit_index);
     uint32_t find_free_bit(const std::vector<uint8_t>& bitmap, uint32_t max_bits);
+    uint32_t count_set_bits(const std::vector<uint8_t>& bitmap, uint32_t max_bits) const;
 };

@@ -60,6 +60,25 @@ def _load_fs_magic(repo: Path) -> int:
     return int(m.group(1), 0)
 
 
+def _load_fs_layout(repo: Path) -> tuple[int, int]:
+    defs = repo / "include" / "fs" / "fs_defs.h"
+    text = defs.read_text(encoding="utf-8")
+
+    def get_int(name: str) -> int:
+        m = re.search(
+            rf"constexpr\s+uint32_t\s+{re.escape(name)}\s*=\s*([0-9]+|0x[0-9A-Fa-f]+)\s*;",
+            text,
+        )
+        if not m:
+            raise RuntimeError(f"cannot find {name} in {defs}")
+        return int(m.group(1), 0)
+
+    max_inodes = get_int("MAX_INODES")
+    data_blocks_start = get_int("DATA_BLOCKS_START")
+    max_data_blocks = _load_swap_start(repo) - data_blocks_start
+    return max_inodes, max_data_blocks
+
+
 def _run(exe: Path, commands: str, cwd: Path) -> RunResult:
     p = subprocess.run(
         [str(exe)],
@@ -124,6 +143,40 @@ def _require_lines_regex(out: str, patterns: list[str]) -> None:
     for ln in lines[len(patterns) :]:
         if ln != "":
             raise AssertionError(f"unexpected stdout\n--- stdout ---\n{out}")
+
+
+def _parse_superblock_snapshots(err: str) -> list[tuple[int, int]]:
+    snapshots: list[tuple[int, int]] = []
+    in_superblock = False
+    free_blocks: int | None = None
+    free_inodes: int | None = None
+
+    for line in err.splitlines():
+        if "========== SuperBlock ==========" in line:
+            in_superblock = True
+            free_blocks = None
+            free_inodes = None
+            continue
+        if "===============================" in line and in_superblock:
+            if free_blocks is None or free_inodes is None:
+                raise AssertionError(
+                    f"incomplete superblock section\n--- stderr ---\n{err}"
+                )
+            snapshots.append((free_blocks, free_inodes))
+            in_superblock = False
+            continue
+        if not in_superblock:
+            continue
+
+        m_blocks = re.search(r"Free blocks:\s+(\d+)", line)
+        if m_blocks:
+            free_blocks = int(m_blocks.group(1))
+            continue
+        m_inodes = re.search(r"Free inodes:\s+(\d+)", line)
+        if m_inodes:
+            free_inodes = int(m_inodes.group(1))
+
+    return snapshots
 
 
 def case_shell_help(exe: Path, repo: Path) -> None:
@@ -528,6 +581,59 @@ def case_kernel_reformat_mismatch(exe: Path, repo: Path) -> None:
         _require_contains(r.err, "Mount successful!")
 
 
+def case_fs_superblock_accounting(exe: Path, repo: Path) -> None:
+    max_inodes, max_data_blocks = _load_fs_layout(repo)
+
+    with tempfile.TemporaryDirectory() as td:
+        cwd = Path(td)
+
+        r = _run(
+            exe,
+            "\n".join(
+                [
+                    "format",
+                    "fsinfo",
+                    "mkdir /a",
+                    "ls /",
+                    "fsinfo",
+                    "touch /a/f",
+                    "fsinfo",
+                    "echo hi > /a/f",
+                    "fsinfo",
+                    "rm /a/f",
+                    "fsinfo",
+                    "exit",
+                    "",
+                ]
+            ),
+            cwd,
+        )
+        if r.code != 0:
+            raise AssertionError(r.out + r.err)
+
+        snapshots = _parse_superblock_snapshots(r.err)
+        expected = [
+            (max_data_blocks - 1, max_inodes - 1),  # format(root inode + root block)
+            (max_data_blocks - 2, max_inodes - 2),  # mkdir /a
+            (max_data_blocks - 2, max_inodes - 3),  # touch /a/f
+            (max_data_blocks - 3, max_inodes - 3),  # echo alloc data block
+            (max_data_blocks - 2, max_inodes - 2),  # rm /a/f
+        ]
+        if snapshots != expected:
+            raise AssertionError(
+                f"unexpected superblock snapshots\nexpected={expected}\nactual={snapshots}\n--- stderr ---\n{r.err}"
+            )
+
+        if not re.search(r"  d \. \(inode=0, size=\d+\)", r.out):
+            raise AssertionError(
+                f"root '.' entry inode mismatch\n--- stdout ---\n{r.out}\n--- stderr ---\n{r.err}"
+            )
+        if not re.search(r"  d \.\. \(inode=0, size=\d+\)", r.out):
+            raise AssertionError(
+                f"root '..' entry inode mismatch\n--- stdout ---\n{r.out}\n--- stderr ---\n{r.err}"
+            )
+
+
 CASES = {
     "shell_help": case_shell_help,
     "fs_persistence": case_fs_persistence,
@@ -539,6 +645,7 @@ CASES = {
     "device_queue_wakeup": case_device_queue_wakeup,
     "swap_partition": case_swap_partition,
     "kernel_reformat_mismatch": case_kernel_reformat_mismatch,
+    "fs_superblock_accounting": case_fs_superblock_accounting,
 }
 
 

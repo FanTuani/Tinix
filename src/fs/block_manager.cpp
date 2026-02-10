@@ -65,7 +65,15 @@ void BlockManager::free_block(uint32_t block_num) {
     bitmap_dirty_ = true;
 }
 
-bool BlockManager::is_bit_set(const std::vector<uint8_t>& bitmap, uint32_t bit_index) {
+uint32_t BlockManager::free_inodes() const {
+    return MAX_INODES - count_set_bits(inode_bitmap_, MAX_INODES);
+}
+
+uint32_t BlockManager::free_blocks() const {
+    return MAX_DATA_BLOCKS - count_set_bits(data_bitmap_, MAX_DATA_BLOCKS);
+}
+
+bool BlockManager::is_bit_set(const std::vector<uint8_t>& bitmap, uint32_t bit_index) const {
     uint32_t byte_index = bit_index / 8;
     uint32_t bit_offset = bit_index % 8;
     return (bitmap[byte_index] & (1 << bit_offset)) != 0;
@@ -90,4 +98,15 @@ uint32_t BlockManager::find_free_bit(const std::vector<uint8_t>& bitmap, uint32_
         }
     }
     return INVALID_INODE;
+}
+
+uint32_t BlockManager::count_set_bits(const std::vector<uint8_t>& bitmap,
+                                      uint32_t max_bits) const {
+    uint32_t count = 0;
+    for (uint32_t i = 0; i < max_bits; ++i) {
+        if (is_bit_set(bitmap, i)) {
+            ++count;
+        }
+    }
+    return count;
 }
